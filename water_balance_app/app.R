@@ -3,356 +3,49 @@ library(tidyverse)
 library(shinythemes)
 library(here)
 library(janitor)
+library(ggalt)
+
 
 
 centroids <- read_csv(here::here("NCPN_centroids1.csv")) %>% 
     clean_names()
 
+names_list = data.frame(
+    var = centroids$park_name,
+    short = centroids$park)
+
+mylist <- as.list(names_list$short)
+# Name it
+names(mylist) <- names_list$var
+
 # read in data
 
-past_day <- read_csv(here("water_balance_app", "past_day.csv")) %>% 
-    mutate(year = lubridate::year(date),
-           month = lubridate::month(date,
-                                    label = TRUE,
-                                    abbr = TRUE),
-           doy = lubridate::yday(date))
+doy_avg_bc <- read_csv("doy_avg_bc.csv") %>% 
+    select(!X1)
+
+doy_avg_wc <- read_csv("doy_avg_wc.csv") %>% 
+    select(!X1)
+
+annual_values <- read_csv("annual_values.csv") %>% 
+    select(!X1)
 
 
-    
-    
-    
-future_day <- read_csv(here("water_balance_app","future_day.csv"))%>% 
-    mutate(year = lubridate::year(date),
-           month = lubridate::month(date,
-                                    label = TRUE,
-                                    abbr = TRUE),
-           doy = lubridate::yday(date))
-
-
-
-
-past_month <- read_csv(here("water_balance_app", "past_month.csv"))%>% 
-    mutate(year = lubridate::year(date),
-           month = lubridate::month(date,
-                                    label = TRUE,
-                                    abbr = TRUE),
-           doy = lubridate::yday(date))
-
-
-
-future_month <- read_csv(here("water_balance_app", "future_month.csv"))%>% 
-    mutate(year = lubridate::year(date),
-           month = lubridate::month(date,
-                                    label = TRUE,
-                                    abbr = TRUE),
-           doy = lubridate::yday(date))
-
-
-# -------------------------
-# -------------------------
-# data wrangling for annual_averages time series graph
-# -------------------------
-# -------------------------
-
-
-annual_past <- past_day %>% 
-    group_by(year, park) %>% 
-    filter(!year == 2020) %>% 
-    summarize(annual_soil_water = mean(soil_water_daily, na.rm = TRUE),
-              annual_runoff = sum(runoff_daily, na.rm = TRUE), 
-              annual_rain = sum(rain_daily, na.rm = TRUE),
-              annual_accumswe = max(accumswe_daily, na.rm = TRUE),
-              annual_pet = sum(pet_daily, na.rm = TRUE),
-              annual_deficit = sum(deficit_daily, na.rm = TRUE), 
-              #annual_agdd = max(agdd_daily, na.rm = TRUE), 
-              #put this back in when agdd is working
-              annual_aet = sum(aet_daily, na.rm = TRUE))
-
-
-# -------------
-# long format future data daily
-# -------------
-
-# -------------
-# worst case
-# -------------
-
-wc_annual_future <- future_day %>%
-    select(date, soil_water_daily_wc:month) %>% # selecting for variables for 8.5 only
-    filter(!year == 2100) %>% 
-    group_by(year, park) %>% 
-    summarize(annual_soil_water_wc = mean(soil_water_daily_wc, na.rm = TRUE),
-              annual_runoff_wc = sum(runoff_daily_wc, na.rm = TRUE),
-              annual_rain_wc = sum(rain_daily_wc, na.rm = TRUE),
-              annual_accumswe_wc = max(accumswe_daily_wc, na.rm = TRUE),
-              annual_pet_wc = sum(pet_daily_wc, na.rm = TRUE),
-              annual_deficit_wc = sum(deficit_daily_wc, na.rm = TRUE),
-              #annual_agdd_wc = max(agdd_daily_wc, na.rm = TRUE), 
-              #put this back in when agdd is working
-              annual_aet_wc = sum(aet_daily_wc, na.rm = TRUE))
-
-#-------------
-# best case
-# ------------
-
-bc_annual_future <- future_day %>% 
-    select(date, soil_water_daily_bc:month) %>% #selecting for 4.5 only
-    filter(!year == 2100) %>% 
-    group_by(year, park) %>% 
-    summarize(annual_soil_water_bc = mean(soil_water_daily_bc, na.rm = TRUE),
-              annual_runoff_bc = sum(runoff_daily_bc, na.rm = TRUE),
-              annual_rain_bc = sum(rain_daily_bc, na.rm = TRUE),
-              annual_accumswe_bc = max(accumswe_daily_bc, na.rm = TRUE),
-              annual_deficit_bc = sum(deficit_daily_bc, na.rm = TRUE),
-              annual_pet_bc = sum(pet_daily_bc, na.rm = TRUE),
-              #annual_agdd_bc = max(agdd_daily_bc, na.rm = TRUE),
-              #put this back in when agdd is working
-              annual_aet_bc = sum(aet_daily_bc, na.rm = TRUE))
-
-# -----------
-# make values into one df
-# -----------
-
-# -----------
-# best case
-# ----------
-
-bc_annual_values <- annual_past %>%
-    full_join(bc_annual_future) %>% 
-    pivot_longer(`annual_soil_water`:`annual_aet_bc`, # The columns I'm gathering together
-                 names_to = "variable", # new column name for existing names
-                 values_to = "annual_value") %>% 
-    ungroup(year, park) %>% 
-    na.omit(annual_values) %>% # new column name to store values
-    mutate(variable = case_when(
-        .$variable %in% c("annual_runoff", "annual_runoff_bc") ~ "Runoff",
-        #.Svariable calls the variable, then it can be renamed
-        #.$variable %in% c("annual_agdd", "annual_agdd_bc") ~ "AGDD",
-        .$variable %in% c("annual_soil_water", "annual_soil_water_bc") ~ "Soil Water",
-        .$variable %in% c("annual_rain", "annual_rain_bc") ~ "Rain",
-        .$variable %in% c("annual_accumswe", "annual_accumswe_bc") ~ "Accumulated SWE",
-        .$variable %in% c("annual_pet", "annual_pet_bc") ~ "PET",
-        .$variable %in% c("annual_deficit", "annual_deficit_bc") ~ "Deficit",
-        TRUE ~ "AET" # last ifelse is just labeled as TRUE
-    )) %>% 
-    mutate(averages = case_when(
-        .$year %in% c(1980:2019) ~ "annual_avg",
-        TRUE ~ "annual_avg_bc"
-    )) %>% 
-    mutate(decades = case_when( #don't need individual decades for this data
-        .$year %in% c(1980:2019) ~ "1980-2019",
-        .$year %in% c(2020:2059) ~ "2020-2059",
-        TRUE ~ "2060-2099")) #decades by 39 yr chunks
-
-# ------------
-# worst case
-# ------------
-
-wc_annual_values <- annual_past %>% 
-    full_join(wc_annual_future) %>%
-    pivot_longer(`annual_soil_water`:`annual_aet_wc`, # The columns I'm gathering together
-                 names_to = "variable", # new column name for existing names
-                 values_to = "annual_value") %>% 
-    na.omit(annual_values) %>% # new column name to store values
-    ungroup(year, park) %>% 
-    mutate(variable = case_when( #make names more readable
-        .$variable %in% c("annual_runoff", "annual_runoff_wc") ~ "Runoff",
-        #.$variable calls the variable, then it can be renamed
-        .$variable %in% c("annual_agdd", "annual_agdd_wc") ~ "AGDD",
-        .$variable %in% c("annual_soil_water", "annual_soil_water_wc") ~ "Soil Water",
-        .$variable %in% c("annual_rain", "annual_rain_wc") ~ "Rain",
-        .$variable %in% c("annual_accumswe", "annual_accumswe_wc") ~ "Accumulated SWE",
-        .$variable %in% c("annual_pet", "annual_pet_wc") ~ "PET",
-        .$variable %in% c("annual_deficit", "annual_deficit_wc") ~ "Deficit",
-        TRUE ~ "AET" # last ifelse is just labeled as TRUE
-    ))  %>% 
-    mutate(averages = case_when(
-        .$year %in% c(1980:2019) ~ "annual_avg",
-        TRUE ~ "annual_avg_wc"
-    )) %>% 
-    mutate(decades = case_when( #don't need individual decades for this data
-        .$year %in% c(1980:2019) ~ "1980-2019",
-        .$year %in% c(2020:2059) ~ "2020-2059",
-        TRUE ~ "2060-2099")) #decades by 39 yr chunks
-
-# ---------------
-# all together now!
-# ---------------
-
-annual_values <- bc_annual_values %>% 
-    full_join(wc_annual_values) 
-
-
-# ----------------------------
-# ----------------------------
-# data wrangling for scatterplot
-# ----------------------------
-# ----------------------------
-
-
-# ----------------------------
-# ----------------------------
-# data wrangling for seasonality
-# ----------------------------
-# ----------------------------
-
-doy_avg_1980_2019 <-  past_day %>% 
-    filter(year %in% c(1980:2019)) %>%
-    pivot_longer(`soil_water_daily`:`aet_daily`, # The columns I'm gathering together
-                 names_to = "variable", # new column name for existing names
-                 values_to = "value") %>%  # new column name to store values) 
-    #for grouping by doy
-    group_by(doy, variable) %>% 
-    summarize(`1980-2019` = mean(value, na.rm = TRUE),
-              month = unique(month))
-
-# --------
-# Best case means
-# --------
-
-# 2020 - 2059 Best case
-# first, rename variables to be able to combine them later
-
-doy_avg_2020_2059_bc <- future_day %>% 
-    filter(year %in% c(2020:2059)) %>%
-    select(soil_water_daily_bc:doy) %>% 
-    pivot_longer(`soil_water_daily_bc`:`aet_daily_bc`, # The columns I'm gathering together
-                 names_to = "variable", # new column name for existing names
-                 values_to = "value") %>% # new column name to store values)
-    mutate(variable = case_when(.$variable == "aet_daily_bc" ~ "aet_daily",
-                                .$variable == "rain_daily_bc" ~ "rain_daily",
-                                .$variable == "runoff_daily_bc" ~ "runoff_daily",
-                                .$variable == "pet_daily_bc" ~ "pet_daily",
-                                .$variable == "accumswe_daily_bc" ~ "accumswe_daily",
-                                .$variable == "soil_water_daily_bc" ~ "soil_water_daily",
-                                .$variable == "agdd_daily_bc" ~ "agdd_daily",
-                                TRUE ~ "deficit_daily")) %>% 
-    group_by(doy, variable) %>% 
-    summarize(`2020-2059` = mean(value, na.rm = TRUE),
-              month = unique(month)) 
-
-
-# 2060 - 2099 Best case df
-# first, rename variables to be able to combine them later
-
-doy_avg_2060_2099_bc <-  future_day %>% 
-    filter(year %in% c(2060:2099)) %>%
-    select(soil_water_daily_bc:doy) %>%
-    pivot_longer(`soil_water_daily_bc`:`aet_daily_bc`, # The columns I'm gathering together
-                 names_to = "variable", # new column name for existing names
-                 values_to = "value") %>%  # new column name to store values) 
-    mutate(variable = case_when(.$variable == "aet_daily_bc" ~ "aet_daily",
-                                .$variable == "rain_daily_bc" ~ "rain_daily",
-                                .$variable == "runoff_daily_bc" ~ "runoff_daily",
-                                .$variable == "pet_daily_bc" ~ "pet_daily",
-                                .$variable == "accumswe_daily_bc" ~ "accumswe_daily",
-                                .$variable == "soil_water_daily_bc" ~ "soil_water_daily",
-                                .$variable == "agdd_daily_bc" ~ "agdd_daily",
-                                TRUE ~ "deficit_daily")) %>% #for grouping by doy
-    group_by(doy, variable) %>% 
-    summarize(`2060-2099` = mean(value, na.rm = TRUE),
-              month = unique(month)) 
-
-#full doy dataframe Best case
-
-doy_avg_bc <- doy_avg_1980_2019 %>% 
-    full_join(doy_avg_2020_2059_bc) %>% 
-    full_join(doy_avg_2060_2099_bc) %>% 
-    pivot_longer(c(`1980-2019`,`2020-2059`,`2060-2099`), # The columns I'm gathering together
-                 names_to = "decades", # new column name for existing names
-                 values_to = "value") %>% # new column name to store values 
-    na.omit(doy_avg_bc) %>%  # because of the way the dataframe was made, there's NA's for second and third 40, just don't want those there
-    pivot_wider(names_from = variable,
-                values_from = value)
-
-
-# --------
-# wc means
-# --------
-
-# 2020 - 2059 wc df
-# first, rename variables to be able to combine them later
-
-doy_avg_2020_2059_wc <- future_day %>% 
-    filter(year %in% c(2020:2059)) %>%
-    select(soil_water_daily_wc:doy) %>% 
-    pivot_longer(`soil_water_daily_wc`:`aet_daily_wc`, # The columns I'm gathering together
-                 names_to = "variable", # new column name for existing names
-                 values_to = "value") %>% # new column name to store values)
-    mutate(variable = case_when(.$variable == "aet_daily_wc" ~ "aet_daily",
-                                .$variable == "rain_daily_wc" ~ "rain_daily",
-                                .$variable == "runoff_daily_wc" ~ "runoff_daily",
-                                .$variable == "pet_daily_wc" ~ "pet_daily",
-                                .$variable == "accumswe_daily_wc" ~ "accumswe_daily",
-                                .$variable == "soil_water_daily_wc" ~ "soil_water_daily",
-                                .$variable == "agdd_daily_wc" ~ "agdd_daily",
-                                TRUE ~ "deficit_daily")) %>% 
-    group_by(doy, variable) %>% 
-    summarize(`2020-2059` = mean(value, na.rm = TRUE),
-              month = unique(month)) 
-
-
-# 2060 - 2099 wc df
-# first, rename variables to be able to combine them later
-
-doy_avg_2060_2099_wc <-  future_day %>% 
-    filter(year %in% c(2060:2099)) %>%
-    select(soil_water_daily_wc:doy) %>%
-    pivot_longer(`soil_water_daily_wc`:`aet_daily_wc`, # The columns I'm gathering together
-                 names_to = "variable", # new column name for existing names
-                 values_to = "value") %>%  # new column name to store values) 
-    mutate(variable = case_when(.$variable == "aet_daily_wc" ~ "aet_daily",
-                                .$variable == "rain_daily_wc" ~ "rain_daily",
-                                .$variable == "runoff_daily_wc" ~ "runoff_daily",
-                                .$variable == "pet_daily_wc" ~ "pet_daily",
-                                .$variable == "accumswe_daily_wc" ~ "accumswe_daily",
-                                .$variable == "soil_water_daily_wc" ~ "soil_water_daily",
-                                .$variable == "agdd_daily_wc" ~ "agdd_daily",
-                                TRUE ~ "deficit_daily")) %>% 
-    group_by(doy, variable) %>% 
-    summarize(`2060-2099` = mean(value, na.rm = TRUE),
-              month = unique(month)) 
-
-
-#full day dataset wc
-
-doy_avg_wc <- doy_avg_1980_2019 %>% 
-    full_join(doy_avg_2020_2059_wc) %>% 
-    full_join(doy_avg_2060_2099_wc) %>% 
-    pivot_longer(c(`1980-2019`,`2020-2059`,`2060-2099`), # The columns I'm gathering together
-                 names_to = "decades", # new column name for existing names
-                 values_to = "value") %>% # new column name to store values 
-    na.omit(doy_avg_wc) %>%  # because of the way the dataframe was made, there's NA's for second and third 40, just don't want those there
-    pivot_wider(names_from = variable,
-                values_from = value) 
-
-
-
+theme_set(theme_classic() + #has the L shape around the graph
+              theme(panel.grid = element_blank(), #removes grid lines
+                    plot.title = element_text(size = 25), #title of plot text size
+                    legend.text = element_text(size = 15), #legend inside text size
+                    legend.title = element_text(size = 18), #legend title text size
+                    axis.title.y = element_text(size = 15), #changes y axis lable text size
+                    axis.title.x = element_blank(),#x axis text size
+                    axis.text.x = element_text(size = 15), #changes x-axis text size
+                    axis.text.y = element_text(size = 15), #changes y-axis text size
+                    legend.position = "top")) 
 
 ui <- fluidPage(#open fluidPage
     
     navbarPage("Water Balance Predictions", theme = shinytheme("flatly"),
     
        tabPanel("About", fluid = TRUE, icon = icon("book-reader"), 
-                
-                sidebarLayout(
-                    sidebarPanel("National Parks in the Northern Colorado Plateau",
-                                 
-                                 checkboxGroupInput("state_select", 
-                                                    label = h3("Select State:"), 
-                                                    choices = list("Utah" = 1,
-                                                                   "Arizona" = 2,
-                                                                   "Colorado" = 3,
-                                                                   "Wyoming" = 4),
-                                                    selected = 1),
-                                 
-                                 
-                                 hr(),
-                                 fluidRow(column(3, verbatimTextOutput("value")))
-                                 
-           
-           ), #close sidebarPanel
-           
            
            mainPanel(
          
@@ -365,156 +58,290 @@ ui <- fluidPage(#open fluidPage
            
        )# close mainPanel
        
-                )#close sidebarLayout
        
        ),#close tabPanel About
        
-       tabPanel("Seasonality", fluid = TRUE, icon = icon("seedling"), 
+       tabPanel("AET & Deficit", fluid = TRUE, icon = icon("chart-bar"), 
                 
+                sidebarLayout(
+                    sidebarPanel("National Parks in the Northern Colorado Plateau",
+                                 
+                                 selectInput(inputId = "park_select_aet_d", 
+                                             label = h3("Choose a Park:"), 
+                                             choices = mylist),#close park_select
+                                 
+                                  radioButtons(inputId = "aet_d_radio", 
+                                               label = h3("Select Scenario:"),
+                                               choices = c("Hotter and wetter" = "annual_avg_bc", 
+                                                           "Hotter and drier" = "annual_avg_wc")), #close radio buttons
+                                 
+     br(),
+                                 
+                                 img(src = "western_CONUS.png", height = 320, width = 330),                            
+                    ), #close sidebarPanel
+                    
+                    
+                    mainPanel(
+                        
+                        h4("Actual Evapotranspiration (AET) and Deficit"),
+                        br(),
+                        p("AET - the water plants use - and deficit - the water plants need - are one of the best measures of a habitats response to climate change than almost anything else. As can be seen in the graph below, habitats in the Western Continental United States fall neatly into these ranges."),
+                           
+                           br(),
+                        
+                        plotOutput(outputId = "aet_d_plot")
+                        
+                    )# close mainPanel
+                    
+                )#close sidebarPanel
+                
+       ),#close tabPanel aet_d
+       
+       tabPanel("Seasonality", fluid = TRUE, icon = icon("seedling"),
+
                 sidebarLayout(
                     sidebarPanel("widgets",
-                                 
-                                 selectInput("park_select_seasonality", label = h3("Choose a Park:"), 
-                                             choices = unique(centroids$park_name), 
-                                             selected = 1),
-                                 
-                                 hr(),
-                                 fluidRow(column(3, verbatimTextOutput("value"))),#close park_select
-                                 
-                                 checkboxGroupInput("variable_select_seasonality", label = h3("Select water balance variables:"), 
+
+                                 selectInput("park_select_seasonality", label = h3("Choose a Park:"),
+                                             choices = mylist),#close park_select
+
+                                 checkboxGroupInput("variable_select_seasonality", label = h3("Select water balance variables:"),
                                                     choices = unique(annual_values$variable),
-                                                    selected = 1),
-                                 
-                                 
-                                 hr(),
-                                 fluidRow(column(3, verbatimTextOutput("value"))),#close variable_select
-                                 
-                                 
-                                 checkboxGroupInput(inputId = "scenario_select_seasonality", label = h3("Select Scenario:"), 
-                                                    choices = list("Hotter and wetter" = "annual_avg_bc", "Hotter and drier" = "annual_avc_wc"),
-                                                    selected = 1),
-                                 
-                                 
-                                 hr(),
-                                 fluidRow(column(3, verbatimTextOutput("value"))),#close scenario_select
-                        
-                        dateRangeInput("dates_seasonality", label = h3("Date range")),
-                        
-                        hr(),
-                        fluidRow(column(4, verbatimTextOutput("value")))
-                        
+                                                    selected = 1),#close variable_select
+
+
+                                 radioButtons("radio", label = h3("Select Scenario:"),
+                                              choices = list("Hotter and wetter" = "annual_avg_bc", "Hotter and drier" = "annual_avg_wc"),
+                                              selected = 1)#close scenario_select
+
+
                     ), #close sidebarPanel
-                    
-                    
+
+
                     mainPanel(
-                        
+
                         "title"
-                        
+
                     )# close mainPanel
-                    
+
                 )#close sidebarPanel
-                
-       ),#close tabPanel Parks
-       
-       tabPanel("Time Series", fluid = TRUE, icon = icon("chart-line"), 
-                
+
+       ),#close tabPanel seasonality
+
+       tabPanel("Time Series", fluid = TRUE, icon = icon("chart-line"),
+
                 sidebarLayout(
                     sidebarPanel(
-                        
+
                         "widgets",
-                        
-                        selectInput("park_select_time", label = h3("Choose a Park:"), 
-                                    choices = unique(centroids$park_name), 
-                                    selected = 1),
-                        
-                        hr(),
-                        fluidRow(column(3, verbatimTextOutput("value"))),#close park_select
-                        
-                        checkboxGroupInput("variable_select_time", label = h3("Select water balance variables:"), 
+
+                        selectInput("park_select_time", label = h3("Choose a Park:"),
+                                    choices = mylist,
+                                    selected = 1),#close park_select
+
+                        checkboxGroupInput("variable_select_time", label = h3("Select water balance variables:"),
                                            choices = unique(annual_values$variable),
-                                           selected = 1),
-                        
-                        
-                        hr(),
-                        fluidRow(column(3, verbatimTextOutput("value"))),#close variable_select
-                        
-                        
-                        checkboxGroupInput(inputId = "scenario_select_time", label = h3("Select Scenario:"), 
-                                           choices = list("Hotter and wetter" = "annual_avg_bc", "Hotter and drier" = "annual_avc_wc"),
-                                           selected = 1),
-                        
-                        
-                        hr(),
-                        fluidRow(column(3, verbatimTextOutput("value")))#close scenario_select
-                        
+                                           selected = 1),#close variable_select
+
+
+                        radioButtons("radio", label = h3("Select Scenario:"),
+                                     choices = list("Hotter and wetter" = "annual_avg_bc", "Hotter and drier" = "annual_avg_wc"),
+                                     selected = 1)#close scenario_select
+
                     ), #close sidebarPanel
-                    
-                    
+
+
                     mainPanel(
-                        
+
                         "title"
-                        
+
                     )# close mainPanel
-                    
+
                 )#close sidebarPanel
-                
-       ), #close tabPanel plots
-       
-       tabPanel("Variability", fluid = TRUE, icon = icon("chart-bar"), 
-                
-                sidebarLayout(
-                    sidebarPanel(
-                        
-                        "widgets",
-                        
-                        selectInput("park_select_scatter", label = h3("Choose a Park:"), 
-                                    choices = unique(centroids$park_name), 
-                                    selected = 1),
-                        
-                        hr(),
-                        fluidRow(column(3, verbatimTextOutput("value"))),#close park_select
-                        
-                        checkboxGroupInput("variable_select_scatter", label = h3("Select water balance variables:"), 
-                                           choices = unique(annual_values$variable),
-                                           selected = 1),
-                        
-                        
-                        hr(),
-                        fluidRow(column(3, verbatimTextOutput("value"))),#close variable_select
-                        
-                        
-                        checkboxGroupInput(inputId = "scenario_select_scatter", label = h3("Select Scenario:"), 
-                                          choices = list("Hotter and wetter" = "bc", "Hotter and drier" = "wc"),
-                                           selected = 1),
-                        
-                        
-                        hr(),
-                        fluidRow(column(3, verbatimTextOutput("value")))#close scenario_select
-                        
-                    ), #close sidebarPanel
-                    
-                    
-                    mainPanel(
-                        
-                        "title"
-                        
-                    )# close mainPanel
-                    
-                )#close sidebarPanel
-                
-       )#close tabPanel plots
+
+       ) #close tabPanel time series
        
     )# close navbarPage
 )#close fluidPage
 
 server <- function(input, output){
     
+    # ------------------------
+    # ------------------------
+    # Deficit v. AET
+    # ------------------------
+    # ------------------------
     
-    output$value <- renderPrint({ input$state_select })
+    # max x limit for the graph - to change dynamically
     
-    output$value <- renderPrint({ input$dates })
+   max_x_d_aet_reactive <-  reactive({
+       max_x_d_aet_1 <- annual_values %>%
+        filter(park %in% c(input$park_select_aet_d)) %>%
+        filter(variable == "Deficit")
+
+       max_x_d_aet_2 <- max(max_x_d_aet_1[,4], na.rm = TRUE)
+
+       max_x_d_aet <- max_x_d_aet_2*1.15
+       })#close max_x_d_aet_reactive
+
+   # may y limit for graph - to change dynamically
+   
+   max_y_d_aet_reactive <-  reactive({
+   max_y_d_aet_1 <- annual_values %>%
+       filter(park == input$park_select_aet_d) %>%
+       filter(variable == "AET")
+
+   max_y_d_aet_2 <- max(max_y_d_aet_1[,4], na.rm = TRUE)
+
+   max_y_d_aet <- max_y_d_aet_2*1.15
+   }) # close max_y_d_aet_reactive
     
-    # if("bc"){ select(ends_with("_bc"))}  if("wc"){select(ends_with("_wc"))}
+    
+     aet_d_reactive <- reactive({
+         require(input$park_select_aet_d, input$aet_d_radio)
+         
+         message('Selected: ', input$park_select_aet_d)
+         message('Selected: ', input$aet_d_radio)
+         
+     annual_values %>% 
+        filter(park %in% input$park_select_aet_d) %>% 
+        filter(averages %in% c(input$aet_d_radio, "annual_avg")) %>% 
+        pivot_wider(names_from = variable,
+                    values_from = annual_value) %>% 
+        clean_names()
+    
+    }) #close aet_d_reactive
+    
+    output$aet_d_plot <- renderPlot({
+        message('Generating plot...')
+    ggplot(aet_d_reactive()) +
+        geom_point(aes(x = deficit, y = aet, color = decades),
+                   size = 4,
+                   alpha = 0.6) +
+    geom_encircle(aes(x = deficit, y = aet, color = decades),
+                  show.legend = FALSE,
+                  size = 2) +
+    labs(title = "Deficit v. AET",
+         x = "Deficit",
+         y = "AET") +
+    scale_color_manual(breaks = c("1980-2019", "2020-2059", "2060-2099"),
+                       values = c("#A3B86C", "#EBC944", "#1496BB")) +
+    theme(legend.title = element_blank()) +
+    ylim(NA, max_y_d_aet_reactive()) +
+    xlim(NA, max_x_d_aet_reactive()) +
+    theme(axis.title.x = element_text(size = 15))
+    })#close renderPlot$aet_d
+        
+    
+    # ----------------------
+    #-----------------------
+    #  seasonality
+    # ----------------------
+    # ----------------------
+    
+    # max_y_seasonality <- reactive({   
+    #     
+    #     max_y_1 <- doy_avg_bc %>%
+    #         full_join(doy_avg_wc) %>%
+    #         filter(park %in% input$park_select_seasonality) %>% 
+    #         select(input$variable_select_seasonality)
+    #     
+    #     
+    #     max_y_2 <- max(max_y_1[,1], na.rm = TRUE)
+    #     
+    #     max_y <- max_y_2*1.15
+    #     
+    # })
+    #     
+    #         
+    #         ggplot(doy_avg_bc) + 
+    #             geom_line(aes(x = as.Date.numeric(doy, origin = "1980-01-01"),
+    #                           y = .data[[.y]],
+    #                           color = decades),
+    #                       size = 0.7,
+    #                       alpha = 0.4) +
+    #             stat_smooth(size = 1.5,
+    #                         se = FALSE,
+    #                         aes(x = as.Date.numeric(doy, origin = "1980-01-01"),#allows for month on xaxis
+    #                             y = .data[[.y]],
+    #                             # calling my variable, which I'll name later in the command
+    #                             group = decades,
+    #                             color = decades),
+    #                         method = glm,
+    #                         family = quasipoisson,
+    #                         formula = y ~ ns(x, 16)) +
+    #             theme(legend.title = element_blank())+
+    #             #internet said to do this
+    #             #quasipoisson is some type of statistical analysis type
+    #             #forumula has something to do with the degrees of freedom
+    #             #https://stackoverflow.com/questions/2777053/in-ggplot-restrict-y-to-be-0-in-loess
+    #             # geom_vline(data = doy_avg_bc,
+    #             #            xintercept = doy[.data[[.y]] == max(.data[[.y]])], color='red') +
+    #             labs(color = "Year",
+    #                  y = ifelse(.y == "agdd_daily", "Growing Degree Days (C)", "Water (mm)"), 
+    #                  # R needs the "" here
+    #                  # the ifelse goes after the command you want to change
+    #                  #.y is useful because it prevents R from confusing it with something else
+    #                  # purrr is much more useful than a for loop here
+    #                  # if {} else{} and if_else() both didn't work, but I don't know why
+    #                  title = case_when(.y ==  "soil_water_daily" ~ 
+    #                                        wrap_sentence(paste("Soil Water Seasonality",
+    #                                                            model_bc, model_bc_rcp_name), 30), #title based on variable
+    #                                    .y == "runoff_daily" ~ 
+    #                                        wrap_sentence(paste("Runoff Seasonality",
+    #                                                            model_bc, model_bc_rcp_name), 30),
+    #                                    .y == "rain_daily" ~  
+    #                                        wrap_sentence(paste("Rain Seasonality",
+    #                                                            model_bc, model_bc_rcp_name), 30),
+    #                                    .y == "agdd_daily" ~ 
+    #                                        wrap_sentence(paste("AGDD Seasonality",
+    #                                                            model_bc,model_bc_rcp_name), 30),
+    #                                    .y == "accumswe_daily"~ 
+    #                                        wrap_sentence(paste(
+    #                                            "Accumulated SWE Seasonality",
+    #                                            model_bc,model_bc_rcp_name), 30),
+    #                                    .y == "pet_daily" ~ 
+    #                                        wrap_sentence(paste(
+    #                                            "Potential Evapotranspiration Seasonality",
+    #                                            model_bc,model_bc_rcp_name), 30),
+    #                                    .y == "deficit_daily" ~ 
+    #                                        wrap_sentence(paste("Deficit Seasonality",
+    #                                                            model_bc, model_bc_rcp_name), 30),
+    #                                    TRUE ~ 
+    #                                        wrap_sentence(paste(
+    #                                            "Actual Evapotranspiration Seasonality",
+    #                                            model_bc, model_bc_rcp_name), 30))) + 
+    #             scale_color_manual(breaks = c("1980-2019", "2020-2059", "2060-2099"),
+    #                                values = c("#A3B86C", "#EBC944", "#1496BB")) +
+    #             ylim(0, max_y) +
+    #             scale_x_date(as.Date.numeric(doy_avg_bc$doy, origin = "1980-01-01"),
+    #                          breaks = seq(as.Date("1980-01-15"), 
+    #                                       as.Date("1980-12-15"),#plots dates midmonth
+    #                                       by = "1 month"),
+    #                          date_labels = "%b")#%b is abbreviated %B is full month name
+            
+
+            
+        
+
+        # model_name_reactive <- reactive({
+        #     centroids %>%
+        #     filter(park == input$park_select_aet_d) %>%
+        #     ifelse(input$aet_d_radio == annual_avg_bc,
+        #            pull(model_bc),
+        #            pull(model_wc))
+        #     })
+        # 
+        # model_rcp_reactive <- reactive({
+        #     centroids %>%
+        #     filter(park == input$park_select_aet_d) %>%
+        #     ifelse(input$aet_d_radio == annual_avg_bc,
+        #            pull(model_bc_rcp),
+        #            pull(model_wc_rcp))
+        # })
+        
+        
+    
     
 }#close server
 
