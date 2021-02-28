@@ -4,6 +4,8 @@ library(shinythemes)
 library(here)
 library(janitor)
 library(ggalt)
+library(splines)
+library(gridExtra)
 
 
 
@@ -11,23 +13,56 @@ centroids <- read_csv(here::here("NCPN_centroids1.csv")) %>%
     clean_names()
 
 names_list = data.frame(
-    var = centroids$park_name,
-    short = centroids$park)
+    var_name = centroids$park_name,
+    short_name = centroids$park)
 
-mylist <- as.list(names_list$short)
+mylist_park <- as.list(names_list$short_name)
 # Name it
-names(mylist) <- names_list$var
+names(mylist_park) <- names_list$var_name
+
+variable_list = data.frame(
+    var_var = unique(annual_values$variable),
+    short_var = c("soil_water_daily", "runoff_daily", "rain_daily", "accumswe_daily", "pet_daily", "deficit_daily", "aet_daily")
+)
+
+mylist_variable <- as.list(variable_list$short_var)
+
+names(mylist_variable) <- variable_list$var_var
 
 # read in data
 
 doy_avg_bc <- read_csv("doy_avg_bc.csv") %>% 
-    select(!X1)
+    select(!X1) %>% 
+    mutate(scenario = "best_case")
 
 doy_avg_wc <- read_csv("doy_avg_wc.csv") %>% 
-    select(!X1)
+    select(!X1) %>% 
+    mutate(scenario = "worst_case")
+
+doy_avg <- doy_avg_bc %>% 
+    full_join(doy_avg_wc) %>% 
+    mutate(doy = as.Date.numeric(doy, origin = "1980-01-01"))
 
 annual_values <- read_csv("annual_values.csv") %>% 
     select(!X1)
+
+wrap_sentence <- function(string, width) {
+    words <- unlist(strsplit(string, " "))
+    fullsentence <- ""
+    checklen <- ""
+    for(i in 1:length(words)) {
+        checklen <- paste(checklen, words[i])
+        if(nchar(checklen)>(width+1)) {
+            fullsentence <- paste0(fullsentence, "\n")
+            checklen <- ""
+        }
+        fullsentence <- paste(fullsentence, words[i])
+    }
+    fullsentence <- sub("^\\s", "", fullsentence)
+    fullsentence <- gsub("\n ", "\n", fullsentence)
+    return(fullsentence)
+}
+#wrap_sentence function taken from https://stackoverflow.com/a/27734975/14061596
 
 
 theme_set(theme_classic() + #has the L shape around the graph
@@ -68,7 +103,7 @@ ui <- fluidPage(#open fluidPage
                                  
                                  selectInput(inputId = "park_select_aet_d", 
                                              label = h3("Choose a Park:"), 
-                                             choices = mylist),#close park_select
+                                             choices = mylist_park),#close park_select
                                  
                                   radioButtons(inputId = "aet_d_radio", 
                                                label = h3("Select Scenario:"),
@@ -103,16 +138,17 @@ ui <- fluidPage(#open fluidPage
                     sidebarPanel("widgets",
 
                                  selectInput("park_select_seasonality", label = h3("Choose a Park:"),
-                                             choices = mylist),#close park_select
+                                             choices = mylist_park),#close park_select
 
                                  checkboxGroupInput("variable_select_seasonality", label = h3("Select water balance variables:"),
-                                                    choices = unique(annual_values$variable),
-                                                    selected = 1),#close variable_select
+                                                    choices = mylist_variable, selected = "soil_water_daily"
+                                                    ),#close variable_select
 
 
-                                 radioButtons("radio", label = h3("Select Scenario:"),
-                                              choices = list("Hotter and wetter" = "annual_avg_bc", "Hotter and drier" = "annual_avg_wc"),
-                                              selected = 1)#close scenario_select
+                                 radioButtons("seasonality_radio", label = h3("Select Scenario:"),
+                                              choices = list("Hotter and wetter" = "best_case", "Hotter and drier" = "worst_case"))#close scenario_select
+                                 
+                            
 
 
                     ), #close sidebarPanel
@@ -120,7 +156,19 @@ ui <- fluidPage(#open fluidPage
 
                     mainPanel(
 
-                        "title"
+                        "title",
+                        
+                        
+                        if(num_plot ==3){plotOutput(outputId = "seasonality_plot",
+                                       width = "100%",
+                                       height = "400px"
+                        )},
+                        
+                        if(num_plot == 4){
+                            plotOutput(outputId = "seasonality_plot",
+                                       width = "100%",
+                                       height = "500px")
+                        }
 
                     )# close mainPanel
 
@@ -136,7 +184,7 @@ ui <- fluidPage(#open fluidPage
                         "widgets",
 
                         selectInput("park_select_time", label = h3("Choose a Park:"),
-                                    choices = mylist,
+                                    choices = mylist_park,
                                     selected = 1),#close park_select
 
                         checkboxGroupInput("variable_select_time", label = h3("Select water balance variables:"),
@@ -238,89 +286,78 @@ server <- function(input, output){
     #  seasonality
     # ----------------------
     # ----------------------
-    
-    # max_y_seasonality <- reactive({   
-    #     
-    #     max_y_1 <- doy_avg_bc %>%
-    #         full_join(doy_avg_wc) %>%
-    #         filter(park %in% input$park_select_seasonality) %>% 
-    #         select(input$variable_select_seasonality)
-    #     
-    #     
-    #     max_y_2 <- max(max_y_1[,1], na.rm = TRUE)
-    #     
-    #     max_y <- max_y_2*1.15
-    #     
-    # })
-    #     
-    #         
-    #         ggplot(doy_avg_bc) + 
-    #             geom_line(aes(x = as.Date.numeric(doy, origin = "1980-01-01"),
-    #                           y = .data[[.y]],
-    #                           color = decades),
-    #                       size = 0.7,
-    #                       alpha = 0.4) +
-    #             stat_smooth(size = 1.5,
-    #                         se = FALSE,
-    #                         aes(x = as.Date.numeric(doy, origin = "1980-01-01"),#allows for month on xaxis
-    #                             y = .data[[.y]],
-    #                             # calling my variable, which I'll name later in the command
-    #                             group = decades,
-    #                             color = decades),
-    #                         method = glm,
-    #                         family = quasipoisson,
-    #                         formula = y ~ ns(x, 16)) +
-    #             theme(legend.title = element_blank())+
-    #             #internet said to do this
-    #             #quasipoisson is some type of statistical analysis type
-    #             #forumula has something to do with the degrees of freedom
-    #             #https://stackoverflow.com/questions/2777053/in-ggplot-restrict-y-to-be-0-in-loess
-    #             # geom_vline(data = doy_avg_bc,
-    #             #            xintercept = doy[.data[[.y]] == max(.data[[.y]])], color='red') +
-    #             labs(color = "Year",
-    #                  y = ifelse(.y == "agdd_daily", "Growing Degree Days (C)", "Water (mm)"), 
-    #                  # R needs the "" here
-    #                  # the ifelse goes after the command you want to change
-    #                  #.y is useful because it prevents R from confusing it with something else
-    #                  # purrr is much more useful than a for loop here
-    #                  # if {} else{} and if_else() both didn't work, but I don't know why
-    #                  title = case_when(.y ==  "soil_water_daily" ~ 
-    #                                        wrap_sentence(paste("Soil Water Seasonality",
-    #                                                            model_bc, model_bc_rcp_name), 30), #title based on variable
-    #                                    .y == "runoff_daily" ~ 
-    #                                        wrap_sentence(paste("Runoff Seasonality",
-    #                                                            model_bc, model_bc_rcp_name), 30),
-    #                                    .y == "rain_daily" ~  
-    #                                        wrap_sentence(paste("Rain Seasonality",
-    #                                                            model_bc, model_bc_rcp_name), 30),
-    #                                    .y == "agdd_daily" ~ 
-    #                                        wrap_sentence(paste("AGDD Seasonality",
-    #                                                            model_bc,model_bc_rcp_name), 30),
-    #                                    .y == "accumswe_daily"~ 
-    #                                        wrap_sentence(paste(
-    #                                            "Accumulated SWE Seasonality",
-    #                                            model_bc,model_bc_rcp_name), 30),
-    #                                    .y == "pet_daily" ~ 
-    #                                        wrap_sentence(paste(
-    #                                            "Potential Evapotranspiration Seasonality",
-    #                                            model_bc,model_bc_rcp_name), 30),
-    #                                    .y == "deficit_daily" ~ 
-    #                                        wrap_sentence(paste("Deficit Seasonality",
-    #                                                            model_bc, model_bc_rcp_name), 30),
-    #                                    TRUE ~ 
-    #                                        wrap_sentence(paste(
-    #                                            "Actual Evapotranspiration Seasonality",
-    #                                            model_bc, model_bc_rcp_name), 30))) + 
-    #             scale_color_manual(breaks = c("1980-2019", "2020-2059", "2060-2099"),
-    #                                values = c("#A3B86C", "#EBC944", "#1496BB")) +
-    #             ylim(0, max_y) +
-    #             scale_x_date(as.Date.numeric(doy_avg_bc$doy, origin = "1980-01-01"),
-    #                          breaks = seq(as.Date("1980-01-15"), 
-    #                                       as.Date("1980-12-15"),#plots dates midmonth
-    #                                       by = "1 month"),
-    #                          date_labels = "%b")#%b is abbreviated %B is full month name
-            
 
+    
+    seasonality_reactive <- reactive({
+        doy_avg %>% 
+            filter(scenario %in% input$seasonality_radio) %>% 
+            filter(park %in% input$park_select_seasonality) 
+    })
+    
+
+
+     output$seasonality_plot <- renderPlot({
+
+         if(!is.null(input$variable_select_seasonality)) {
+
+         nplot<-length(input$variable_select_seasonality)
+
+         p<-list()
+
+         for (i in 1:nplot) {
+             p[[i]]<- ggplot(data = seasonality_reactive(), aes_string(y = input$variable_select_seasonality[i])) +
+                 geom_line(aes(x = doy,
+                               color = decades),
+                           size = 0.7,
+                           alpha = 0.4) +
+                 stat_smooth(size = 1.5,
+                             se = FALSE,
+                             aes(x = doy,
+                                 group = decades,
+                                 color = decades),
+                             method = glm,
+                             family = quasipoisson,
+                             formula = y ~ ns(x, 16)) +
+                 theme(legend.title = element_blank())+
+                 #internet said to do this
+                 #quasipoisson is some type of statistical analysis type
+                 #forumula has something to do with the degrees of freedom
+                 #https://stackoverflow.com/questions/2777053/in-ggplot-restrict-y-to-be-0-in-loess
+                 # geom_vline(data = doy_avg_bc,
+                 #            xintercept = doy[.data[[.y]] == max(.data[[.y]])], color='red') +
+                 labs(color = "Year",
+                      y = ifelse(input$variable_select_seasonality[i] == "agdd_daily", "Growing Degree Days (C)", "Water (mm)"),
+                 # R needs the "" here
+                 # the ifelse goes after the command you want to change
+                 # .y is useful because it prevents R from confusing it with something else
+                 # purrr is much more useful than a for loop here
+                 # if {} else{} and if_else() both didn't work, but I don't know why
+                 title = case_when(input$variable_select_seasonality[i] ==  "soil_water_daily" ~ "Soil Water Seasonality",
+                                   input$variable_select_seasonality[i] == "runoff_daily" ~ "Runoff Seasonality",
+                                   input$variable_select_seasonality[i] == "rain_daily" ~ "Rain Seasonality",
+                                   input$variable_select_seasonality[i] == "agdd_daily" ~ "AGDD Seasonality",
+                                   input$variable_select_seasonality[i] == "accumswe_daily"~ "Accumulated SWE Seasonality",
+
+                                   input$variable_select_seasonality[i] == "pet_daily" ~
+                                       wrap_sentence("Potential Evapotranspiration Seasonality", 30),
+                                   input$variable_select_seasonality[i] == "deficit_daily" ~ "Deficit Seasonality",
+                                   TRUE ~ wrap_sentence("Actual Evapotranspiration easonality", 30))) +
+                 scale_color_manual(breaks = c("1980-2019", "2020-2059", "2060-2099"),
+                                    values = c("#A3B86C", "#EBC944", "#1496BB")) +
+                 #ylim(0, max_y_seasonality()) +
+                 scale_x_date(doy_avg$doy,
+                              breaks = seq(as.Date("1980-01-15"),
+                                           as.Date("1980-12-15"),#plots dates midmonth
+                                           by = "1 month"),
+                              date_labels = "%b")#%b is abbreviated %B is full month name
+             
+             num_plots = length(nplot)
+
+         }
+         do.call(grid.arrange, p)
+         }
+
+    })
             
         
 
