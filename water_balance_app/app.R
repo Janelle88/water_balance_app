@@ -120,7 +120,7 @@ ui <- fluidPage(#open fluidPage
                         
                         h4("Actual Evapotranspiration (AET) and Deficit"),
                         br(),
-                        p("AET - the water plants use - and deficit - the water plants need - are one of the best measures of a habitats response to climate change than almost anything else. As can be seen in the graph below, habitats in the Western Continental United States fall neatly into these ranges."),
+                        p("AET - the water plants use - and deficit - the water plants need - when graphed against each other is one of the best measures of a habitats response to climate change than almost anything else. As can be seen in the graph to the left, habitats in the Western Continental United States fall neatly into these ranges. Use the graph to the left to compare changes through time to a park you are familiar with. Does it remain in the same range for the habitat it has been, or does it change? Each bubble in the reactive plot represents 40 years, with one observation for each year. 40 in the recent past in green, 40 in the near future in yellow, and 40 in the distant futre in blue."),
                            
                            br(),
                         
@@ -156,19 +156,22 @@ ui <- fluidPage(#open fluidPage
 
                     mainPanel(
 
-                        "title",
+                        h4("Seasaonality Plots"), 
                         
+                        p("Seasonality plots help us to understand how peaks and valleys will change through time. We can see how timing of events will change as a result of climate change. For water balance variables, this is important because many ecosystems are reliant on timing. One example of this in the Colorado Plateau Region is the monsoon season. If timing of this were to change, this could have large cascading impacts. Knowing what the future looks like in the best and worst case scenario allows managers to prepare for these possible changes."),
                         
-                        if(num_plot ==3){plotOutput(outputId = "seasonality_plot",
-                                       width = "100%",
-                                       height = "400px"
-                        )},
+                        plotOutput(outputId = "seasonality_plot")
                         
-                        if(num_plot == 4){
-                            plotOutput(outputId = "seasonality_plot",
-                                       width = "100%",
-                                       height = "500px")
-                        }
+                        # if(num_plots == 3){plotOutput(outputId = "seasonality_plot",
+                        #                width = "100%",
+                        #                height = "400px"
+                        # )},
+                        # 
+                        # if(num_plots == 4){
+                        #     plotOutput(outputId = "seasonality_plot",
+                        #                width = "100%",
+                        #                height = "500px")
+                        # }
 
                     )# close mainPanel
 
@@ -181,27 +184,26 @@ ui <- fluidPage(#open fluidPage
                 sidebarLayout(
                     sidebarPanel(
 
-                        "widgets",
-
                         selectInput("park_select_time", label = h3("Choose a Park:"),
-                                    choices = mylist_park,
-                                    selected = 1),#close park_select
+                                    choices = mylist_park),#close park_select
 
                         checkboxGroupInput("variable_select_time", label = h3("Select water balance variables:"),
-                                           choices = unique(annual_values$variable),
-                                           selected = 1),#close variable_select
+                                           choices = unique(annual_values$variable), selected = "Soil Water"),#close variable_select
 
 
-                        radioButtons("radio", label = h3("Select Scenario:"),
+                        radioButtons("time_radio", label = h3("Select Scenario:"),
                                      choices = list("Hotter and wetter" = "annual_avg_bc", "Hotter and drier" = "annual_avg_wc"),
-                                     selected = 1)#close scenario_select
+                                     selected = "annual_avg_bc")#close scenario_select
 
                     ), #close sidebarPanel
 
 
                     mainPanel(
 
-                        "title"
+                        h4("Annual values through time"),
+                        
+                        p("Understanding values through time helps us to see what the future will look like compared to the present. The years highlighted in the graph below show a historically 'wet' year in blue and a historically 'dry' year in red. These are offered for easy comparison, to be able to understand how the future may relate to years you are familiar with."),
+                        plotOutput(outputId = "time_plot")
 
                     )# close mainPanel
 
@@ -294,7 +296,7 @@ server <- function(input, output){
             filter(park %in% input$park_select_seasonality) 
     })
     
-
+    num_plots <- reactive({length(input$variable_select_seasonality)})
 
      output$seasonality_plot <- renderPlot({
 
@@ -351,31 +353,108 @@ server <- function(input, output){
                                            by = "1 month"),
                               date_labels = "%b")#%b is abbreviated %B is full month name
              
-             num_plots = length(nplot)
-
+            
+             
          }
+         
          do.call(grid.arrange, p)
          }
-
+         
+         
     })
-            
-        
+           
+     # ---------------------
+     # ---------------------
+     # time series plot
+     # ---------------------
+     # ---------------------
 
-        # model_name_reactive <- reactive({
-        #     centroids %>%
-        #     filter(park == input$park_select_aet_d) %>%
-        #     ifelse(input$aet_d_radio == annual_avg_bc,
-        #            pull(model_bc),
-        #            pull(model_wc))
-        #     })
-        # 
-        # model_rcp_reactive <- reactive({
-        #     centroids %>%
-        #     filter(park == input$park_select_aet_d) %>%
-        #     ifelse(input$aet_d_radio == annual_avg_bc,
-        #            pull(model_bc_rcp),
-        #            pull(model_wc_rcp))
-        # })
+     time_reactive <- reactive({
+         
+         annual_values %>%
+             filter(averages %in% c(input$time_radio, "annual_avg")) %>%
+             filter(park %in% input$park_select_time)
+         
+     })# close time reactive
+     
+     point_low <- reactive({annual_values %>%
+             filter(averages %in% c(input$time_radio, "annual_avg")) %>%
+             filter(park %in% input$park_select_time) %>% 
+             filter(year == 2012)})
+     
+     point_high<- reactive({annual_values %>%
+             filter(averages %in% c(input$time_radio, "annual_avg")) %>%
+             filter(park %in% input$park_select_time) %>% 
+             filter(year == 2016)})
+
+    
+     output$time_plot <- renderPlot({
+
+         if(!is.null(input$variable_select_time)) {
+
+             nplot_time<-length(input$variable_select_time)
+
+             p_time<-list()
+
+             for(i in 1:nplot_time) {
+                 
+                 
+                 p_time[[i]] <- ggplot(data = time_reactive() %>% filter(variable %in% annual_values$variable[i]))+
+                         geom_line(aes(x = year,
+                                       y = annual_value,
+                                       color = averages),
+                                   size = .75) +
+                         labs(title = wrap_sentence(paste("Annual",
+                                                          input$variable_select_time[i]),30),
+                              y = ifelse(input$variable_select_time[i] == "agdd_daily",
+                                         "Growing Degree Days (C)",
+                                         "Water (mm)")) +
+                     geom_hline(data = point_low()%>% 
+                                    filter(variable %in% annual_values$variable[i]), # draws a line at a dry year
+                                yintercept = point_low()%>% 
+                                    filter(variable %in% annual_values$variable[i]) %>%
+                                    pull(annual_value),
+                                linetype = "dashed",
+                                color = "#DA621E") +
+                     geom_hline(data = point_high() %>% 
+                                      filter(variable %in% annual_values$variable[i]), # draws a line at a wet year
+                                yintercept = point_high() %>% 
+                                    filter(variable %in% annual_values$variable[i]) %>%
+                                    pull(annual_value),
+                                linetype = "dashed",
+                                color = "#1287A8") +
+                     geom_point(data = point_low() %>% 
+                                    filter(variable %in% annual_values$variable[i]), # highlights a dry year point
+                                aes(x = year, y = annual_value),
+                                color = "#DA621E",
+                                alpha =  0.25,
+                                size = 4) +
+                     geom_point(data = point_high()%>% 
+                                    filter(variable %in% annual_values$variable[i]), # highlights a dry year point
+                                aes(x = year, y = annual_value),
+                                color = "#1287A8",
+                                alpha =  0.25,
+                                size = 4) +
+                     geom_text(data = point_low()%>% 
+                                   filter(variable %in% annual_values$variable[i]), # labels the line
+                               aes(x = 1973, 
+                                   y = annual_value,
+                                   label = year, 
+                                   vjust = -0.35), # -0.x moves the text up above the line
+                               color = "#DA621E") +
+                     geom_text(data = point_high()%>% 
+                                   filter(variable %in% annual_values$variable[i]), # labels the line
+                               aes(x = 1973, 
+                                   y = annual_value,
+                                   label = year, 
+                                   vjust = -0.35), # -0.x moves the text up above the line
+                               color = "#1287A8") +
+                         scale_color_manual(name = "", values = c("gray60","#EBC944"), labels = (c("Historical", "Predicted")))
+
+             }# close plot loop
+             do.call(grid.arrange,p_time)
+         }# close if is.null
+         }) #close timeplot
         
         
     
