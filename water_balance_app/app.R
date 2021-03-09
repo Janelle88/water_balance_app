@@ -12,22 +12,6 @@ library(gridExtra)
 centroids <- read_csv(here::here("NCPN_centroids1.csv")) %>% 
     clean_names()
 
-names_list = data.frame(
-    var_name = centroids$park_name,
-    short_name = centroids$park)
-
-mylist_park <- as.list(names_list$short_name)
-# Name it
-names(mylist_park) <- names_list$var_name
-
-variable_list = data.frame(
-    var_var = unique(annual_values$variable),
-    short_var = c("soil_water_daily", "runoff_daily", "rain_daily", "accumswe_daily", "pet_daily", "deficit_daily", "aet_daily")
-)
-
-mylist_variable <- as.list(variable_list$short_var)
-
-names(mylist_variable) <- variable_list$var_var
 
 # read in data
 
@@ -64,6 +48,23 @@ wrap_sentence <- function(string, width) {
 }
 #wrap_sentence function taken from https://stackoverflow.com/a/27734975/14061596
 
+names_list = data.frame(
+    var_name = centroids$park_name,
+    short_name = centroids$park)
+
+mylist_park <- as.list(names_list$short_name)
+# Name it
+names(mylist_park) <- names_list$var_name
+
+variable_list = data.frame(
+    var_var = unique(annual_values$variable),
+    short_var = c("soil_water_daily", "runoff_daily", "rain_daily", "accumswe_daily", "pet_daily", "deficit_daily", "aet_daily")
+)
+
+mylist_variable <- as.list(variable_list$short_var)
+
+names(mylist_variable) <- variable_list$var_var
+
 
 theme_set(theme_classic() + #has the L shape around the graph
               theme(panel.grid = element_blank(), #removes grid lines
@@ -88,8 +89,13 @@ ui <- fluidPage(#open fluidPage
            br(),
            p("Climate change will have impacts worldwide. Understanding how these changes will affect natural resources is important to better understand how they will respond. Most climate models use temperature and precipitation to show these changes, which can be hard to relate to changes in local habitats. Fortunately though, a dataset created by the National Parks Service's Mike Tercek, John Gross and David Thoma extrapolated out the data of these models into easier to understand water balance variables."),
            br(),
-           img(src = "mccabe_and_markstrom.png", height = 422, width = 600)
+           img(src = "mccabe_and_markstrom.png", height = 422, width = 600),
+           br(),
            
+           p("For more information, check out this presenetation I gave in January 2021 to resource managers in National Parks in the Northern Colorado Plateau:"),
+           br(),
+           
+           HTML('<iframe width="560" height="315" src="https://www.youtube.com/embed/PwqnAD5k6ao" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>')
            
        )# close mainPanel
        
@@ -120,7 +126,8 @@ ui <- fluidPage(#open fluidPage
                         
                         h4("Actual Evapotranspiration (AET) and Deficit"),
                         br(),
-                        p("AET - the water plants use - and deficit - the water plants need - when graphed against each other is one of the best measures of a habitats response to climate change than almost anything else. As can be seen in the graph to the left, habitats in the Western Continental United States fall neatly into these ranges. Use the graph to the left to compare changes through time to a park you are familiar with. Does it remain in the same range for the habitat it has been, or does it change? Each bubble in the reactive plot represents 40 years, with one observation for each year. 40 in the recent past in green, 40 in the near future in yellow, and 40 in the distant futre in blue."),
+                        p("AET - the water plants use - and deficit - the water plants need - when graphed against each other is one of the best measures of a habitats response to climate change than almost anything else. As can be seen in the graph to the left, habitats in the Western Continental United States fall neatly into these ranges. Use the graph to the left to compare changes through time to a park you are familiar with. Does it remain in the same range for the habitat it has been, or does it change? Also, toggle betweeen the two scenarios for the future - hotter and wetter, or hotter and drier. How do the two climate futures compare to each other? How would management have to change in a drier climate future compared to a wetter climate future?"),
+                          p("Each bubble in the reactive plot represents 40 years, with one observation for each year. 40 in the recent past in green, 40 in the near future in yellow, and 40 in the distant futre in blue."),
                            
                            br(),
                         
@@ -158,7 +165,7 @@ ui <- fluidPage(#open fluidPage
 
                         h4("Seasaonality Plots"), 
                         
-                        p("Seasonality plots help us to understand how peaks and valleys will change through time. We can see how timing of events will change as a result of climate change. For water balance variables, this is important because many ecosystems are reliant on timing. One example of this in the Colorado Plateau Region is the monsoon season. If timing of this were to change, this could have large cascading impacts. Knowing what the future looks like in the best and worst case scenario allows managers to prepare for these possible changes."),
+                        p("Seasonality plots help us to understand how peaks and valleys will change through time. We can see how timing of events will change as a result of climate change. For water balance variables, this is important because many ecosystems are reliant on timing. One example of this in the Colorado Plateau Region is the monsoon season. If timing of this were to change, this could have large cascading impacts. Knowing what the future looks like in the hotter and drier or hotter and wetter scenarios allows managers to prepare for these possible changes. Check out all water balance variables at once or click on only the ones you are interested in. Also, toggle between the two climate futures to compare how each variable may look in the different scenarios."),
                         
                         plotOutput(outputId = "seasonality_plot")
                         
