@@ -1,0 +1,12 @@
+name: water_balance_app
+title: water_balance_app
+username:
+account: janelle88
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3893253
+bundleId: 4417633
+url: https://janelle88.shinyapps.io/water_balance_app/
+when: 1617224530.92138
+asMultiple: FALSE
+asStatic: FALSE
